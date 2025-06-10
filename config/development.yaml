@@ -1,0 +1,205 @@
+# Development environment configuration for Emotional Conversation Processor
+
+# Application settings
+app:
+  name: "emotional-conversation-processor"
+  version: "0.1.0"
+  environment: "development"
+  debug: true
+  log_level: "DEBUG"
+
+# Qdrant vector database configuration
+qdrant:
+  host: "localhost"
+  port: 6333
+  collection_name: "conversation_history_dev"
+  timeout: 30
+  # Connection pool settings
+  connection_pool_size: 10
+  max_retries: 3
+  retry_delay: 1.0
+
+# Vector configuration
+vector:
+  dimension: 384
+  distance_metric: "cosine" # cosine, euclidean, dot
+  index_params:
+    m: 16
+    ef_construct: 200
+    full_scan_threshold: 10000
+
+# Emotion classification settings
+emotion_classification:
+  model: "j-hartmann/emotion-english-distilroberta-base"
+  confidence_threshold: 0.1
+  batch_size: 8
+  device: "auto" # auto, cpu, cuda
+  cache_dir: "./models/emotion"
+  max_text_length: 500
+
+# Embedding generation settings
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  normalize: true
+  device: "auto"
+  batch_size: 32
+  cache_dir: "./models/embeddings"
+  # Emotion enhancement factors
+  emotion_boost_factor: 1.2
+  technical_penalty_factor: 0.8
+
+# Technical content detection
+technical_detection:
+  strictness: 0.5 # 0.0 to 1.0
+  patterns_enabled: true
+  keyword_matching: true
+  code_block_weight: 5.0
+  error_pattern_weight: 3.0
+
+# Processing pipeline settings
+processing:
+  # Conversation segmentation
+  segmentation:
+    chunk_size: 512
+    overlap_size: 50
+    min_segment_length: 10
+    max_segment_length: 2048
+
+  # Importance weighting
+  importance_weights:
+    emotional: 0.6
+    technical_penalty: 0.3
+    length_bonus: 0.1
+    recency: 0.0 # Not used in basic processing
+
+  # Batch processing
+  batch_size: 50
+  max_workers: 4
+
+  # Quality thresholds
+  min_emotional_score: 0.4
+  max_technical_score: 0.6
+  min_importance_weight: 0.1
+
+# Retrieval settings
+retrieval:
+  default_limit: 10
+  max_limit: 100
+  score_threshold: 0.1
+
+  # Emotional context retrieval
+  emotional_retrieval:
+    weight: 0.7
+    min_emotional_score: 0.4
+    max_technical_score: 0.6
+    diversity_factor: 0.2
+
+  # Re-ranking parameters
+  rerank:
+    similarity_weight: 0.5
+    emotional_weight: 0.3
+    importance_weight: 0.2
+
+# Storage settings
+storage:
+  # Data directories
+  data_dir: "./data"
+  raw_conversations_dir: "./data/raw/conversations"
+  processed_embeddings_dir: "./data/processed/embeddings"
+  exports_dir: "./data/exports"
+
+  # File formats
+  conversation_formats: ["txt", "md", "json"]
+  export_format: "json"
+
+  # Backup settings
+  backup:
+    enabled: true
+    interval_hours: 24
+    retention_days: 30
+    location: "./data/backups"
+
+# Logging configuration
+logging:
+  level: "DEBUG"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+
+  # File logging
+  file:
+    enabled: true
+    path: "./logs/application/app.log"
+    rotation: "100 MB"
+    retention: "30 days"
+    compression: "gz"
+
+  # Console logging
+  console:
+    enabled: true
+    colorize: true
+
+  # Component-specific log levels
+  loggers:
+    emotion_classifier: "INFO"
+    technical_detector: "INFO"
+    embedder: "INFO"
+    vector_store: "DEBUG"
+    retrieval: "DEBUG"
+
+# Performance monitoring
+monitoring:
+  enabled: true
+  metrics_interval: 60 # seconds
+
+  # Resource monitoring
+  system:
+    cpu_threshold: 80
+    memory_threshold: 85
+    disk_threshold: 90
+
+  # Application metrics
+  processing:
+    track_segment_processing_time: true
+    track_embedding_generation_time: true
+    track_search_performance: true
+
+# Development-specific settings
+development:
+  # Hot reloading
+  auto_reload: true
+
+  # Debug features
+  save_intermediate_results: true
+  profile_performance: true
+
+  # Test data
+  use_sample_data: true
+  sample_conversation_size: 100
+
+  # Model caching
+  aggressive_caching: false
+  clear_cache_on_restart: true
+
+# Feature flags
+features:
+  experimental_embeddings: false
+  advanced_emotion_detection: false
+  conversation_summarization: false
+  multi_language_support: false
+  real_time_processing: false
+
+# Security settings (development)
+security:
+  api_keys_required: false
+  rate_limiting: false
+  input_validation: "basic"
+
+# Integration settings
+integrations:
+  # External APIs
+  apis:
+    timeout: 30
+    max_retries: 3
+
+  # Webhook configurations
+  webhooks:
+    enabled: false

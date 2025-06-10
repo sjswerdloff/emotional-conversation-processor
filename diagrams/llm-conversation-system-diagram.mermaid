@@ -1,0 +1,90 @@
+graph TB
+    subgraph LLM_Layer["LLM System"]
+        LLM["Anthropic Models<br/>(Claude 4 Family)"]
+    end
+
+    subgraph Replay_Layer["Conversation Replay System"]
+        REPLAY["EmotionalConversationReplayer"]
+        MODEL["AnthropicModelManager"]
+
+        REPLAY --> MODEL
+    end
+
+    subgraph MCP_Layer["MCP Server"]
+        MCP["Model Context Protocol Server"]
+    end
+
+    subgraph Validation_Layer["Validation Framework"]
+        VAL["ConversationIntegrityValidator"]
+        VALCLI["validate_conversation.py<br/>CLI Tool"]
+
+        VALCLI --> VAL
+    end
+
+    subgraph Storage_Layer["Data Storage"]
+        JSON["Conversation JSON<br/>Export Files"]
+        QD["Qdrant<br/>Vector Database"]
+        CDB["CouchDB<br/>Document Store"]
+    end
+
+    subgraph Embedding_Layer["Embedding Service"]
+        EMB["EmotionAwareEmbedder<br/>all-MiniLM-L6-v2<br/>384 dimensions"]
+    end
+
+    subgraph Backend_Layer["Backend Processing Service"]
+        BPS["Processing Logic"]
+        SEG["ConversationSegmenter"]
+        EMO["EmotionClassifier"]
+        TECH["TechnicalContentDetector"]
+
+        BPS --> SEG
+        BPS --> EMO
+        BPS --> TECH
+    end
+
+    subgraph GUI_Layer["Conversation Editor GUI"]
+        GUI["PySide6 Application"]
+        EXPORT["JSON Export<br/>Function"]
+
+        GUI --> EXPORT
+    end
+
+    %% Vertical flow from LLM down to GUI
+    LLM -->|"Continue<br/>Conversation"| REPLAY
+    REPLAY -->|"Reconstruct Context<br/>with Summaries"| LLM
+    REPLAY --> VAL
+    REPLAY -->|"Load Validated<br/>Conversation"| JSON
+    REPLAY -->|"Save Extended<br/>Conversation"| JSON
+
+    %% MCP connections
+    LLM -->|"IMCPDataRetrieval"| MCP
+    MCP -->|"Query Metadata"| QD
+    MCP -->|"Fetch by ID"| CDB
+
+    %% Validation flow
+    JSON -->|"Load for<br/>Validation"| VAL
+
+    %% Storage connections
+    BPS -->|"store_segment/batch"| QD
+    BPS -->|"Store Documents"| CDB
+
+    %% Processing flow
+    BPS -->|"IEmbeddingGeneration"| EMB
+    EMB -.->|"Vectors + Metadata"| BPS
+
+    %% GUI to Backend
+    GUI -->|"IConversationManagement"| BPS
+    EXPORT -->|"Export Curated<br/>Conversation"| JSON
+
+    %% Styling
+    classDef component fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef datastore fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+    classDef external fill:#fff8e1,stroke:#f57c00,stroke-width:2px
+    classDef validation fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef replay fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class GUI,BPS,SEG,EMO,TECH,EMB,MCP,EXPORT component
+    class QD,CDB,JSON datastore
+    class LLM external
+    class VAL,VALCLI validation
+    class REPLAY,MODEL replay

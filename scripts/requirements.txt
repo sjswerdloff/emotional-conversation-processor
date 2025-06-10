@@ -1,0 +1,16 @@
+# Emotional Conversation Replayer Requirements
+# Dependencies for conversation validation and replay functionality
+
+# Core dependencies
+pydantic>=2.0.0          # Data validation and settings management
+anthropic>=0.40.0        # Anthropic API client
+
+# Optional dependencies for future extensions
+# qdrant-client>=1.0.0   # Vector database client (when needed)
+# requests>=2.28.0       # HTTP client for CouchDB integration (when needed)
+
+# Development dependencies (optional)
+# pytest>=7.0.0          # Testing framework
+# black>=22.0.0          # Code formatting
+# flake8>=5.0.0          # Linting
+# mypy>=1.0.0            # Type checking

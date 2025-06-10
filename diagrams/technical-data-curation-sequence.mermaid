@@ -1,0 +1,38 @@
+sequenceDiagram
+    participant Human as Human Editor
+    participant GUI as Editor GUI
+    participant BPS as Backend Processing
+    participant EMB as Embedding Service
+    participant QD as Qdrant
+    participant CDB as CouchDB
+
+    Note over Human,CDB: Technical Data Curation Workflow
+
+    Human->>GUI: Select conversation segment
+    GUI->>GUI: Display segment with indicators
+    GUI-->>Human: Show technical data consumption alert
+
+    Human->>GUI: Open technical data pop-out
+    GUI->>BPS: Request full technical data
+    BPS->>CDB: Fetch original technical data
+    CDB-->>BPS: Return full text (10KB-10MB)
+    BPS-->>GUI: Display technical data
+
+    Human->>GUI: Review and write summary
+    Human->>GUI: Click "Generate Embedding"
+
+    GUI->>BPS: Process summary
+    BPS->>EMB: Create embedding(summary)
+    Note over EMB: Apply emotion boost/penalty<br/>Add context prefixes<br/>Normalize vector
+    EMB-->>BPS: Return vector[384]
+
+    BPS->>QD: Store embedding + metadata
+    Note over QD: Store:<br/>- Summary text<br/>- Vector embedding<br/>- Reference to CouchDB ID<br/>- Metadata
+
+    BPS->>CDB: Store/verify original data
+    Note over CDB: Archive full technical<br/>data with document ID
+
+    QD-->>BPS: Confirm storage
+    CDB-->>BPS: Confirm storage
+    BPS-->>GUI: Update UI success
+    GUI-->>Human: Show completion status

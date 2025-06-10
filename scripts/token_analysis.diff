@@ -1,0 +1,77 @@
+--- claude_conversation_extractor.js
++++ claude_conversation_extractor_enhanced.js
+@@ -12,7 +12,14 @@
+ (function() {
+     'use strict';
+
+-    console.log('🤖 Claude Conversation Extractor v1.0');
++    console.log('🤖 Claude Conversation Extractor v1.1');
+     console.log('📖 Extracting conversation...');
+
++    function estimateTokens(text) {
++        // Simple estimation: ~0.75 tokens per word + adjustments for special content
++        const words = text.split(/\s+/).length;
++        const codeBlocks = (text.match(/```[\s\S]*?```/g) || []).length;
++        const functionCalls = (text.match(/<function_calls>[\s\S]*?<\/antml:function_calls>/g) || []).length;
++        return Math.ceil(words * 0.75) + (codeBlocks * 10) + (functionCalls * 20);
++    }
++
+     function extractConversation() {
+@@ -130,6 +137,12 @@
+         stats.average_words_per_turn = Math.round(stats.total_words / stats.total_turns);
+         stats.average_characters_per_turn = Math.round(stats.total_characters / stats.total_turns);
+
++        // Add token analysis
++        stats.total_tokens = turns.reduce((sum, turn) => sum + estimateTokens(turn.content), 0);
++        stats.average_tokens_per_turn = Math.round(stats.total_tokens / stats.total_turns);
++        stats.estimated_context_usage = stats.total_tokens + 2000; // +system prompt estimate
++        stats.context_utilization_percent = ((stats.estimated_context_usage / 200000) * 100).toFixed(1);
++
+         return stats;
+     }
+
+@@ -172,6 +185,7 @@
+         console.log('• To download as file: downloadConversation()');
+         console.log('• To get JSON format: getConversationJSON()');
+         console.log('• To get timestamped format: getTimestampedFormat()');
++        console.log('• To analyze tokens: analyzeTokens()');
+
+         // Make functions available globally for user convenience
+         window.downloadConversation = () => downloadAsFile(formattedConversation);
+@@ -185,6 +199,26 @@
+             copyToClipboard(timestamped);
+             return timestamped;
+         };
++        window.analyzeTokens = () => {
++            console.log('\n🔢 TOKEN ANALYSIS:');
++            console.log(`Total estimated tokens: ${stats.total_tokens.toLocaleString()}`);
++            console.log(`Average per turn: ${stats.average_tokens_per_turn}`);
++            console.log(`Estimated context usage: ${stats.estimated_context_usage.toLocaleString()}`);
++            console.log(`Context utilization: ${stats.context_utilization_percent}%`);
++
++            // Show top token-consuming turns
++            const turnsWithTokens = turns.map(turn => ({
++                ...turn,
++                tokens: estimateTokens(turn.content)
++            })).sort((a, b) => b.tokens - a.tokens);
++
++            console.log('\n🔝 HIGHEST TOKEN TURNS:');
++            turnsWithTokens.slice(0, 3).forEach((turn, i) => {
++                const preview = turn.content.substring(0, 80) + '...';
++                console.log(`${i + 1}. ${turn.speaker} (${turn.tokens} tokens): ${preview}`);
++            });
++
++            return {
++                total_tokens: stats.total_tokens,
++                context_usage: stats.estimated_context_usage,
++                utilization_percent: stats.context_utilization_percent
++            };
++        };
+
+         console.log('\n✅ Extraction complete! Conversation copied to clipboard.');
+@@ -207,4 +241,5 @@
+ • Timestamped: Use getTimestampedFormat()
+ • JSON: Use getConversationJSON()
+ • Download file: Use downloadConversation()
++• Token analysis: Use analyzeTokens()
+ `);

@@ -1,0 +1,49 @@
+sequenceDiagram
+    participant BPS as Backend Processing
+    participant SEG as ConversationSegmenter
+    participant EMO as EmotionClassifier
+    participant TECH as TechnicalDetector
+    participant EMB as EmotionAwareEmbedder
+    participant QD as Qdrant
+
+    Note over BPS,QD: Emotion-Aware Embedding Generation
+
+    BPS->>SEG: Process raw conversation
+    SEG->>SEG: Detect format (Claude Desktop, etc)
+    SEG->>SEG: Clean and segment
+    SEG-->>BPS: ConversationTurns[]
+
+    loop For each segment
+        BPS->>EMO: Classify emotions(segment)
+        EMO->>EMO: Preprocess text
+        EMO->>EMO: Run emotion model
+        EMO-->>BPS: emotion_score, labels[]
+
+        BPS->>TECH: Detect technical content(segment)
+        TECH->>TECH: Pattern matching
+        TECH->>TECH: Keyword detection
+        TECH-->>BPS: technical_score
+
+        BPS->>BPS: Calculate importance_weight
+        Note over BPS: Weight = 0.7*emotional<br/>- 0.3*technical<br/>+ 0.2*recency
+
+        BPS->>EMB: Create embedding(segment)
+        EMB->>EMB: Add emotion prefix
+        Note over EMB: [EMOTION-strongly: joy, love]
+        EMB->>EMB: Add speaker context
+        Note over EMB: [SPEAKER: User]
+        EMB->>EMB: Add technical marker
+        Note over EMB: [TECHNICAL] if score > 0.6
+
+        EMB->>EMB: Generate base embedding
+        EMB->>EMB: Apply emotion boost (1.2x)
+        EMB->>EMB: Apply technical penalty (0.8x)
+        EMB->>EMB: Normalize vector
+
+        EMB-->>BPS: vector[384] + metadata
+
+        BPS->>QD: Store segment + embedding
+        QD-->>BPS: Confirm storage
+    end
+
+    BPS-->>BPS: Processing complete

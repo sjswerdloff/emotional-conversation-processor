@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant Human as Human Editor
+    participant GUI as Editor GUI
+    participant BPS as Backend Processing
+    participant VAL as Validator
+    participant FS as File System
+
+    Note over Human,FS: Conversation Export Workflow
+
+    Human->>GUI: Complete curation session
+    Human->>GUI: Click "Export Conversation"
+
+    GUI->>BPS: Gather conversation data
+    BPS->>BPS: Compile segments
+    BPS->>BPS: Collect metadata
+    BPS->>BPS: Generate export_info
+
+    Note over BPS: Create JSON structure:<br/>- export_info<br/>- chats array<br/>- messages with metadata<br/>- vector/document references
+
+    BPS->>VAL: Pre-validate export
+    VAL->>VAL: Check structure
+    VAL->>VAL: Verify references
+    VAL->>VAL: Validate counts
+
+    alt Validation Passes
+        VAL-->>BPS: Validation success
+        BPS->>FS: Write JSON file
+        FS-->>BPS: File saved
+        BPS-->>GUI: Export complete
+        GUI-->>Human: Show success + file path
+    else Validation Fails
+        VAL-->>BPS: Validation errors
+        BPS-->>GUI: Export failed
+        GUI-->>Human: Show errors to fix
+    end

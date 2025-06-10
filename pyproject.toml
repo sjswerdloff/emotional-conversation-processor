@@ -1,0 +1,230 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "emotional-processor"
+version = "0.1.0"
+description = "Process and replay emotional context from LLM conversations using vector databases"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "qdrant-client>=1.7.0",
+    "sentence-transformers>=2.2.2",
+    "transformers>=4.35.0",
+    "torch>=2.1.0",
+    "spacy>=3.7.0",
+    "numpy>=1.24.0",
+    "pandas>=2.1.0",
+    "pydantic>=2.5.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
+    "click>=8.1.0",
+    "tqdm>=4.66.0",
+    "loguru>=0.7.0",
+    "tiktoken>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.15.0",
+    "pre-commit>=3.6.0",
+]
+api = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "httpx>=0.25.0",
+]
+notebooks = [
+    "jupyter>=1.0.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "plotly>=5.17.0",
+]
+
+[project.scripts]
+ecp-process = "scripts.process_conversation:main"
+ecp-setup = "scripts.setup_database:main"
+ecp-health = "scripts.health_check:main"
+
+[project.urls]
+Homepage = "https://github.com/sjswerdloff/emotional-conversation-processor"
+Repository = "https://github.com/sjswerdloff/emotional-conversation-processor.git"
+Documentation = "https://emotional-conversation-processor.readthedocs.io/"
+"Bug Tracker" = "https://github.com/sjswerdloff/emotional-conversation-processor/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/emotional_processor"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 127
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "PIE", # flake8-pie
+    "A",   # flake8-builtins
+    "COM", # flake8-commas
+    "ISC", # flake8-implicit-str-concat
+    "T20", # flake8-print
+    "PT",  # flake8-pytest-style
+]
+ignore = [
+    "E501",   # line too long, handled by formatter
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "ISC001", # conflicts with formatter
+    "COM812", # conflicts with formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]  # Allow unused imports in __init__.py
+"tests/*" = ["ARG", "PT011", "PT012", "S101"]  # More relaxed rules for tests
+"scripts/*" = ["T20"]  # Allow print statements in scripts
+
+[tool.ruff.lint.isort]
+known-first-party = ["emotional_processor"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+# Enable modern type features
+allow_redefinition = false
+local_partial_types = true
+implicit_reexport = false
+strict_optional = true
+# Allow modern syntax
+disallow_any_generics = false
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "qdrant_client.*",
+    "sentence_transformers.*",
+    "transformers.*",
+    "torch.*",
+    "spacy.*",
+    "sklearn.*",
+    "nltk.*",
+    "pandas.*",
+    "numpy.*",
+    "pytest.*",
+    "docker.*",
+    "psutil.*",
+    "fastapi.*",
+    "uvicorn.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "--cov=src/emotional_processor",
+    "--cov-report=html:htmlcov",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "performance: Performance tests",
+    "slow: Slow running tests",
+    "requires_qdrant: Tests that require Qdrant server",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/emotional_processor"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.15.0",
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "pytest-async>=0.1.1",
+]

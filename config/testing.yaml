@@ -1,0 +1,278 @@
+# Testing environment configuration for Emotional Conversation Processor
+
+# Application settings
+app:
+  name: "emotional-conversation-processor"
+  version: "0.1.0"
+  environment: "testing"
+  debug: true
+  log_level: "INFO"
+
+# Qdrant vector database configuration (test instance)
+qdrant:
+  host: "localhost"
+  port: 6334 # Different port for testing
+  collection_name: "test_conversation_history"
+  timeout: 10
+  connection_pool_size: 5
+  max_retries: 2
+  retry_delay: 0.5
+
+# Vector configuration (smaller for faster tests)
+vector:
+  dimension: 384
+  distance_metric: "cosine"
+  index_params:
+    m: 8 # Smaller for faster indexing in tests
+    ef_construct: 100
+    full_scan_threshold: 1000
+
+# Emotion classification settings (optimized for testing)
+emotion_classification:
+  model: "j-hartmann/emotion-english-distilroberta-base"
+  confidence_threshold: 0.1
+  batch_size: 4 # Smaller batches for tests
+  device: "cpu" # Force CPU for consistent test results
+  cache_dir: "./tests/models/emotion"
+  max_text_length: 500
+
+# Embedding generation settings (test-optimized)
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  normalize: true
+  device: "cpu" # Force CPU for consistent test results
+  batch_size: 8 # Smaller batches
+  cache_dir: "./tests/models/embeddings"
+  emotion_boost_factor: 1.2
+  technical_penalty_factor: 0.8
+
+# Technical content detection
+technical_detection:
+  strictness: 0.5
+  patterns_enabled: true
+  keyword_matching: true
+  code_block_weight: 5.0
+  error_pattern_weight: 3.0
+
+# Processing pipeline settings (test-optimized)
+processing:
+  segmentation:
+    chunk_size: 256 # Smaller chunks for faster tests
+    overlap_size: 25
+    min_segment_length: 5
+    max_segment_length: 1024
+
+  importance_weights:
+    emotional: 0.6
+    technical_penalty: 0.3
+    length_bonus: 0.1
+    recency: 0.0
+
+  batch_size: 10 # Smaller batches
+  max_workers: 2 # Fewer workers for tests
+
+  min_emotional_score: 0.4
+  max_technical_score: 0.6
+  min_importance_weight: 0.1
+
+# Retrieval settings
+retrieval:
+  default_limit: 5 # Smaller limits for tests
+  max_limit: 20
+  score_threshold: 0.1
+
+  emotional_retrieval:
+    weight: 0.7
+    min_emotional_score: 0.4
+    max_technical_score: 0.6
+    diversity_factor: 0.2
+
+  rerank:
+    similarity_weight: 0.5
+    emotional_weight: 0.3
+    importance_weight: 0.2
+
+# Storage settings (test directories)
+storage:
+  data_dir: "./tests/data"
+  raw_conversations_dir: "./tests/data/raw/conversations"
+  processed_embeddings_dir: "./tests/data/processed/embeddings"
+  exports_dir: "./tests/data/exports"
+
+  conversation_formats: ["txt", "md", "json"]
+  export_format: "json"
+
+  backup:
+    enabled: false # Disable backups in tests
+
+# Logging configuration (test-friendly)
+logging:
+  level: "INFO"
+  format: "{time:HH:mm:ss} | {level} | {name} | {message}"
+
+  file:
+    enabled: true
+    path: "./logs/tests/test.log"
+    rotation: "10 MB"
+    retention: "7 days"
+    compression: "gz"
+
+  console:
+    enabled: false # Reduce noise in test output
+    colorize: false
+
+  loggers:
+    emotion_classifier: "WARNING" # Reduce ML model noise
+    technical_detector: "WARNING"
+    embedder: "WARNING"
+    vector_store: "INFO"
+    retrieval: "INFO"
+
+# Performance monitoring (minimal for tests)
+monitoring:
+  enabled: false # Disable in tests
+  metrics_interval: 10
+
+  system:
+    cpu_threshold: 95
+    memory_threshold: 95
+    disk_threshold: 95
+
+# Test-specific settings
+testing:
+  # Test data management
+  use_mock_models: false # Set to true to use mocked models
+  cleanup_after_tests: true
+  preserve_test_data: false
+
+  # Performance testing
+  timeout_seconds: 30
+  max_test_duration: 300
+
+  # Data generation
+  generate_test_conversations: true
+  test_conversation_count: 10
+  test_segment_count: 50
+
+  # Model testing
+  test_model_accuracy: true
+  accuracy_thresholds:
+    emotion_classification: 0.6
+    technical_detection: 0.7
+    embedding_similarity: 0.8
+
+  # Integration testing
+  test_full_pipeline: true
+  test_vector_storage: true
+  test_retrieval_quality: true
+
+# Feature flags (conservative for testing)
+features:
+  experimental_embeddings: false
+  advanced_emotion_detection: false
+  conversation_summarization: false
+  multi_language_support: false
+  real_time_processing: false
+
+# Security settings (minimal for testing)
+security:
+  api_keys_required: false
+  rate_limiting: false
+  input_validation: "strict" # More validation in tests
+
+# Test fixtures and sample data
+fixtures:
+  # Sample conversations for testing
+  conversations:
+    emotional_high: |
+      User: I'm so excited about this project! It means everything to me.
+      Assistant: I can feel your enthusiasm! Let's make this amazing.
+      User: Thank you so much for believing in me.
+
+    technical_high: |
+      User: Can you help me debug this Python function?
+      Assistant: Here's the corrected code:
+      ```python
+      def process_data(data):
+          try:
+              return json.loads(data)
+          except ValueError as e:
+              logging.error(f"JSON parsing failed: {e}")
+              return None
+      ```
+      User: Perfect! The error handling looks good.
+
+    mixed_content: |
+      User: I'm grateful for your help, but I'm struggling with the implementation.
+      Assistant: I understand your frustration. Let's break down the algorithm step by step.
+      User: That makes me feel more confident about tackling this.
+
+  # Expected classification results
+  expected_results:
+    emotional_high:
+      min_emotional_score: 0.7
+      max_technical_score: 0.3
+      expected_emotions: ["joy", "gratitude", "excitement"]
+
+    technical_high:
+      min_technical_score: 0.7
+      max_emotional_score: 0.3
+      expected_patterns: ["code_block", "programming_keywords"]
+
+    mixed_content:
+      min_emotional_score: 0.4
+      min_technical_score: 0.3
+      expected_emotions: ["gratitude", "anxiety"]
+
+# Database test configuration
+database:
+  # Test collection settings
+  test_collections:
+    prefix: "test_"
+    auto_cleanup: true
+    isolation: true # Each test gets its own collection
+
+  # Test data volume
+  max_test_points: 1000
+  max_batch_size: 50
+
+  # Performance expectations
+  expected_performance:
+    search_latency_ms: 100
+    indexing_rate_per_second: 100
+    memory_usage_mb: 500
+
+# Mock configurations
+mocks:
+  # When to use mocks vs real models
+  emotion_classifier: false # Use real model for accuracy
+  embedder: false # Use real model for consistency
+  vector_store: false # Use real Qdrant for integration tests
+
+  # Mock response configurations
+  mock_responses:
+    emotion_classification:
+      default_score: 0.5
+      default_emotions: ["neutral"]
+
+    technical_detection:
+      default_score: 0.3
+
+    embeddings:
+      dimension: 384
+      seed: 42 # For reproducible test embeddings
+
+# Test coverage requirements
+coverage:
+  minimum_percentage: 80
+  exclude_files:
+    - "*/tests/*"
+    - "*/conftest.py"
+    - "*/mock_*.py"
+
+  critical_components:
+    emotion_classifier: 90
+    technical_detector: 85
+    embedder: 85
+    vector_store: 90
+    retrieval: 85

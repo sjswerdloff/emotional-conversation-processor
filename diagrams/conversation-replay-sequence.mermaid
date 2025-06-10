@@ -1,0 +1,57 @@
+sequenceDiagram
+    participant User as User
+    participant CLI as Replayer CLI
+    participant REP as ConversationReplayer
+    participant VAL as Validator
+    participant MOD as ModelManager
+    participant LLM as Anthropic LLM
+    participant MCP as MCP Server
+    participant QD as Qdrant
+    participant CDB as CouchDB
+
+    Note over User,CDB: Conversation Replay/Reincarnation Workflow
+
+    User->>CLI: python emotional_conversation_replayer.py conversation.json
+    CLI->>REP: Initialize replayer
+    REP->>MOD: Resolve model (claude-4-sonnet)
+    MOD-->>REP: Validated model ID
+
+    REP->>VAL: Validate conversation file
+    Note over VAL: CRITICAL checks:<br/>- Structure integrity<br/>- Reference validation<br/>- Count consistency
+
+    alt Validation Fails
+        VAL-->>REP: Critical failures
+        REP-->>CLI: Not safe for reincarnation
+        CLI-->>User: Show validation errors
+    else Validation Passes
+        VAL-->>REP: Safe for reincarnation
+        REP->>REP: Extract messages
+        REP->>REP: Detect original model
+
+        REP->>LLM: Initialize with conversation history
+        Note over LLM: Reincarnated with<br/>preserved context
+
+        REP-->>User: Ready for continuation
+
+        loop Interactive Conversation
+            User->>REP: Type message
+            REP->>LLM: Send message + history
+
+            opt LLM needs full technical data
+                LLM->>MCP: Request full data (reference ID)
+                MCP->>QD: Query metadata
+                QD-->>MCP: Get CouchDB reference
+                MCP->>CDB: Fetch full document
+                CDB-->>MCP: Return technical data
+                MCP-->>LLM: Provide full context
+            end
+
+            LLM-->>REP: Generate response
+            REP-->>User: Display response
+            REP->>REP: Update conversation
+        end
+
+        User->>REP: Exit conversation
+        REP->>REP: Save extended conversation
+        REP-->>User: Saved to extended_conversation_[timestamp].json
+    end
