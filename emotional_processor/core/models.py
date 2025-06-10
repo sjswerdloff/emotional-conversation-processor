@@ -90,22 +90,32 @@ class ConversationSegment:
         self.importance_weight = max(0.0, min(1.0, self.importance_weight))
 
         # Normalize timestamp
-        if self.timestamp and isinstance(self.timestamp, str):
-            try:
-                # Validate timestamp format
-                datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
-            except ValueError:
+        if self.timestamp is not None and isinstance(self.timestamp, str):
+            # Empty strings should be treated as None
+            if not self.timestamp.strip():
                 self.timestamp = None
+            else:
+                try:
+                    # Validate timestamp format
+                    datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    self.timestamp = None
 
     @property
     def content_type(self) -> ContentType:
         """Determine the primary content type based on scores."""
+        # Check for clear emotional dominance first
         if self.emotional_score > 0.6 and self.technical_score < 0.3:
             return ContentType.EMOTIONAL
+        # Check for clear technical dominance
         elif self.technical_score > 0.6 and self.emotional_score < 0.3:
             return ContentType.TECHNICAL
-        elif abs(self.emotional_score - self.technical_score) < 0.2:
+        # Check for mixed content (both scores significant and close)
+        elif (self.emotional_score >= 0.3 or self.technical_score >= 0.3) and abs(
+            self.emotional_score - self.technical_score
+        ) < 0.2:
             return ContentType.MIXED
+        # Default to neutral for low scores or unclear patterns
         else:
             return ContentType.NEUTRAL
 
