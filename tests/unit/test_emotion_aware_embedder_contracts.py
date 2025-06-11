@@ -9,6 +9,7 @@ Following medical software testing philosophy: Test contracts, not implementatio
 """
 
 import numpy as np
+import pytest
 
 from emotional_processor.core.models import ConversationSegment
 from emotional_processor.embeddings.emotion_aware_embedder import EmotionAwareEmbedder
@@ -211,28 +212,24 @@ class TestEmotionAwareEmbedderMedicalComplianceContracts:
     """Test contracts ensuring compliance with medical software reliability requirements."""
 
     def test_error_resilience_contract_malformed_input_safety(self) -> None:
-        """Test contract: malformed input should not crash medical software."""
+        """Test contract: malformed input should fail fast for medical safety."""
         embedder = EmotionAwareEmbedder()
 
-        # Medical safety: malformed segments should be handled gracefully
+        # Medical safety: malformed segments should fail fast to prevent data corruption
         malformed_segments = [
-            ConversationSegment(content=None, speaker="User"),  # None content
-            ConversationSegment(content="", speaker=""),  # Empty speaker
-            ConversationSegment(content="Valid text", speaker=None),  # None speaker
+            ConversationSegment(content=None, speaker="User"),  # None content - causes model error
         ]
 
         for segment in malformed_segments:
-            # Contract: should handle malformed input gracefully without crashing
-            embedding = embedder.create_embedding(segment)
+            # Contract: malformed input must fail fast, not produce invalid embeddings
+            with pytest.raises(RuntimeError, match="Could not create embedding"):
+                embedder.create_embedding(segment)
 
-            # Contract: even with malformed input, should return valid embedding structure
-            assert isinstance(embedding, list)
-            assert len(embedding) == embedder.dimension
-            assert all(isinstance(x, float | np.floating) for x in embedding)
-
-            # Contract: result should be a valid embedding vector (not all zeros for fallback)
-            embedding_array = np.array(embedding)
-            assert np.all(np.isfinite(embedding_array)), "Embedding should contain valid numbers"
+        # Test that valid segments still work correctly
+        valid_segment = ConversationSegment(content="Valid text", speaker="User")
+        embedding = embedder.create_embedding(valid_segment)
+        assert isinstance(embedding, list)
+        assert len(embedding) == embedder.dimension
 
     def test_unicode_safety_contract_international_content(self) -> None:
         """Test contract: international content is handled safely in medical contexts."""

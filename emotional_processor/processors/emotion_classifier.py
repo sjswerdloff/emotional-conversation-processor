@@ -179,8 +179,8 @@ class EmotionClassifier:
             return max_score, detected_emotions
 
         except Exception as e:
-            logger.warning(f"Emotion classification failed for text (length {len(text)}): {e}")
-            return 0.0, []
+            logger.exception("Emotion classification failed")
+            raise RuntimeError("Could not classify emotions") from e
 
     def classify_batch(self, texts: list[str]) -> list[tuple[float, list[str]]]:
         """
@@ -244,8 +244,8 @@ class EmotionClassifier:
             return final_results
 
         except Exception as e:
-            logger.error(f"Batch emotion classification failed: {e}")
-            return [(0.0, []) for _ in texts]
+            logger.exception("Batch emotion classification failed")
+            raise RuntimeError("Could not classify batch emotions") from e
 
     def get_detailed_analysis(self, text: str) -> EmotionResult:
         """

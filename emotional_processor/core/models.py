@@ -84,10 +84,16 @@ class ConversationSegment:
             except ValueError:
                 self.speaker = SpeakerType.UNKNOWN
 
-        # Validate scores
-        self.emotional_score = max(0.0, min(1.0, self.emotional_score))
-        self.technical_score = max(0.0, min(1.0, self.technical_score))
-        self.importance_weight = max(0.0, min(1.0, self.importance_weight))
+        # Validate and normalize scores, tracking corruption
+        self.emotional_score = self._normalize_score(self.emotional_score, "emotional_score")
+        self.technical_score = self._normalize_score(self.technical_score, "technical_score")
+        self.importance_weight = self._normalize_score(self.importance_weight, "importance_weight")
+
+        # Normalize emotional_labels to ensure it's a list (can be corrupted from database)
+        emotional_labels_any: Any = self.emotional_labels
+        if not isinstance(emotional_labels_any, list):
+            self._mark_field_corrupted("emotional_labels", f"invalid type: {type(emotional_labels_any)}")
+            self.emotional_labels = []
 
         # Normalize timestamp
         if self.timestamp is not None and isinstance(self.timestamp, str):
@@ -100,6 +106,33 @@ class ConversationSegment:
                     datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
                 except ValueError:
                     self.timestamp = None
+
+    def _normalize_score(self, score: Any, field_name: str) -> float:
+        """Normalize score to valid float between 0.0 and 1.0, tracking corruption."""
+        try:
+            if isinstance(score, int | float):
+                return max(0.0, min(1.0, float(score)))
+            elif isinstance(score, str):
+                # Try to convert string to float
+                return max(0.0, min(1.0, float(score)))
+            else:
+                # Invalid type - mark as corrupted
+                self._mark_field_corrupted(field_name, f"invalid type: {type(score)}")
+                return 0.0
+        except (ValueError, TypeError) as e:
+            # Conversion failed - mark as corrupted
+            self._mark_field_corrupted(field_name, f"conversion failed: {e}")
+            return 0.0
+
+    def _mark_field_corrupted(self, field_name: str, reason: str) -> None:
+        """Mark a field as corrupted in metadata for memory integrity tracking."""
+        if "corruption_detected" not in self.metadata:
+            self.metadata["corruption_detected"] = {}
+        self.metadata["corruption_detected"][field_name] = {
+            "corrupted": True,
+            "reason": reason,
+            "defaulted_to": 0.0 if field_name.endswith("_score") else "empty_list",
+        }
 
     @property
     def content_type(self) -> ContentType:
@@ -133,6 +166,37 @@ class ConversationSegment:
     def is_highly_technical(self) -> bool:
         """Check if segment is highly technical."""
         return self.technical_score > 0.7
+
+    def is_field_corrupted(self, field_name: str) -> bool:
+        """Check if a specific field was corrupted during data loading."""
+        corruption_data = self.metadata.get("corruption_detected", {})
+        field_corruption = corruption_data.get(field_name, {})
+        return bool(field_corruption.get("corrupted", False))
+
+    def get_corruption_reason(self, field_name: str) -> str | None:
+        """Get the reason why a field was corrupted, if any."""
+        corruption_data = self.metadata.get("corruption_detected", {})
+        field_corruption = corruption_data.get(field_name, {})
+        return field_corruption.get("reason") if field_corruption.get("corrupted") else None
+
+    @property
+    def has_memory_corruption(self) -> bool:
+        """Check if this segment has any corrupted fields (memory integrity issue)."""
+        return "corruption_detected" in self.metadata and bool(self.metadata["corruption_detected"])
+
+    @property
+    def corrupted_fields(self) -> list[str]:
+        """Get list of fields that were corrupted during data loading."""
+        corruption_data = self.metadata.get("corruption_detected", {})
+        return [field for field, data in corruption_data.items() if data.get("corrupted", False)]
+
+    def emotional_state_known(self) -> bool:
+        """Check if emotional state is genuinely known vs corrupted/unknown."""
+        return not self.is_field_corrupted("emotional_score") and not self.is_field_corrupted("emotional_labels")
+
+    def technical_state_known(self) -> bool:
+        """Check if technical classification is genuinely known vs corrupted/unknown."""
+        return not self.is_field_corrupted("technical_score")
 
 
 @dataclass

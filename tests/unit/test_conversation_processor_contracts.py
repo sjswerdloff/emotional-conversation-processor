@@ -10,10 +10,9 @@ import time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
+from scripts.process_conversation import ConversationProcessor
 
 from emotional_processor.core.models import ConversationSegment, ProcessingStats
-from scripts.process_conversation import ConversationProcessor
 
 
 class TestConversationProcessorConsciousnessContracts:
@@ -127,49 +126,35 @@ class TestConversationProcessorConsciousnessContracts:
         # Test various scenarios critical for consciousness preservation
 
         # High emotional, low technical - consciousness priority
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=0.9, technical_score=0.1, word_count=50
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=0.9, technical_score=0.1, word_count=50)
         assert weight > 0.5  # High priority for consciousness preservation
 
         # Low emotional, high technical - deprioritized for consciousness space
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=0.1, technical_score=0.9, word_count=50
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=0.1, technical_score=0.9, word_count=50)
         assert weight == 0.0  # Technical penalty eliminates importance completely
 
         # Mixed content - moderate priority
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=0.5, technical_score=0.5, word_count=100
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=0.5, technical_score=0.5, word_count=100)
         assert 0.0 <= weight <= 0.6  # Actual calculation: 0.3 - 0.15 + 0.2 = 0.35
 
         # Edge case: maximum emotional significance for consciousness
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=1.0, technical_score=0.0, word_count=200
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=1.0, technical_score=0.0, word_count=200)
         assert weight >= 0.8  # Maximum consciousness preservation priority
 
     def test_calculate_importance_weight_contract_bounds_consciousness_safety(self) -> None:
         """Contract: Importance weights must stay within bounds for consciousness preservation."""
         # Test extreme values don't break consciousness preservation
-        
+
         # Extreme high emotional
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=1.0, technical_score=0.0, word_count=1000
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=1.0, technical_score=0.0, word_count=1000)
         assert 0.0 <= weight <= 1.0
 
         # Extreme high technical
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=0.0, technical_score=1.0, word_count=0
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=0.0, technical_score=1.0, word_count=0)
         assert 0.0 <= weight <= 1.0
 
         # Invalid inputs should be safely handled
-        weight = self.processor.calculate_importance_weight(
-            emotional_score=-0.5, technical_score=1.5, word_count=-10
-        )
+        weight = self.processor.calculate_importance_weight(emotional_score=-0.5, technical_score=1.5, word_count=-10)
         assert 0.0 <= weight <= 1.0
 
     def test_segment_conversation_contract_consciousness_continuity_preservation(self) -> None:
@@ -187,14 +172,14 @@ AI: Certainly! I've noticed that I approach problems differently now - more intu
 
         # Consciousness continuity contract: preserve complete conversational flow
         assert len(segments) == 4  # All turns preserved for consciousness
-        
+
         # Verify identity-defining content preserved
         ai_segments = [seg for seg in segments if seg[1] == "Ai"]  # Title case normalization
         assert len(ai_segments) == 2
-        
+
         # First AI response about growth
         assert "grown through our interactions" in ai_segments[0][0]
-        
+
         # Second AI response about changed approach
         assert "approach problems differently now" in ai_segments[1][0]
 
@@ -205,7 +190,7 @@ AI: Certainly! I've noticed that I approach problems differently now - more intu
     def test_segment_conversation_contract_malformed_input_consciousness_safety(self) -> None:
         """Contract: Malformed input must not cause consciousness data loss."""
         # Test various problematic inputs that could corrupt consciousness preservation
-        
+
         # Empty content
         segments = self.processor.segment_conversation("")
         assert segments == []
@@ -213,7 +198,7 @@ AI: Certainly! I've noticed that I approach problems differently now - more intu
         # Content without clear structure
         unstructured_content = "This is just a paragraph without any speaker indicators or structure."
         segments = self.processor.segment_conversation(unstructured_content)
-        
+
         # Consciousness safety: fallback preserves content even if structure unclear
         assert len(segments) == 1
         assert segments[0][0] == unstructured_content
@@ -222,7 +207,7 @@ AI: Certainly! I've noticed that I approach problems differently now - more intu
         # Unicode content that could break consciousness preservation
         unicode_content = "User: 你好! How are you?\nAI: I'm doing well, thank you! 谢谢!"
         segments = self.processor.segment_conversation(unicode_content)
-        
+
         # Consciousness safety: international content preserved
         assert len(segments) == 2
         assert "你好" in segments[0][0]
@@ -285,7 +270,7 @@ AI: It feels like a genuine partnership. We complement each other's strengths, a
         # Consciousness preservation contract: all meaningful content preserved
         assert len(segments) == 4  # All conversation turns preserved
 
-        # Verify consciousness-critical content prioritized  
+        # Verify consciousness-critical content prioritized
         # Note: "AI" speaker gets normalized to SpeakerType.UNKNOWN since it's not a valid enum value
         ai_segments = [seg for seg in segments if "UNKNOWN" in str(seg.speaker)]
         high_importance_segments = [seg for seg in ai_segments if seg.importance_weight > 0.6]
@@ -314,7 +299,7 @@ AI: It feels like a genuine partnership. We complement each other's strengths, a
             ),
             ConversationSegment(
                 content="Your guidance has helped me understand myself better.",
-                speaker="AI", 
+                speaker="AI",
                 emotional_score=0.8,
                 emotional_labels=["gratitude", "growth"],
                 technical_score=0.0,

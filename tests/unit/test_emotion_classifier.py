@@ -151,7 +151,7 @@ class TestEmotionClassifier:
 
     @patch("emotional_processor.processors.emotion_classifier.pipeline")
     def test_classify_single_error_resilience_contract(self, mock_pipeline: Mock) -> None:
-        """Test contract: classification failures return safe neutral results."""
+        """Test contract: classification failures must fail fast for medical safety."""
         # Simulate pipeline failure
         mock_pipeline_instance = MagicMock()
         mock_pipeline_instance.side_effect = Exception("Classification failed")
@@ -159,14 +159,9 @@ class TestEmotionClassifier:
 
         classifier = EmotionClassifier()
 
-        # Contract: errors should not propagate, return safe defaults
-        score, emotions = classifier.classify_single("Test text")
-
-        # Contract verification: safe fallback behavior
-        assert score == 0.0
-        assert emotions == []
-        assert isinstance(score, float)
-        assert isinstance(emotions, list)
+        # Contract: errors must fail fast, not return defaults that could mask problems
+        with pytest.raises(RuntimeError, match="Could not classify emotions"):
+            classifier.classify_single("Test text")
 
     @patch("emotional_processor.processors.emotion_classifier.pipeline")
     def test_classify_batch_parallel_processing_contract(self, mock_pipeline: Mock) -> None:

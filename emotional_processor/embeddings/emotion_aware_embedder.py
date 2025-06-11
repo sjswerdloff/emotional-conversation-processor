@@ -178,9 +178,8 @@ class EmotionAwareEmbedder:
             return list(embedding)
 
         except Exception as e:
-            logger.warning(f"Failed to create embedding for segment {segment.segment_id}: {e}")
-            # Return zero vector as fallback
-            return [0.0] * self.dimension
+            logger.exception(f"Failed to create embedding for segment {segment.segment_id}")
+            raise RuntimeError(f"Could not create embedding for segment {segment.segment_id}") from e
 
     def create_contextual_embedding(self, segment: ConversationSegment) -> list[float]:
         """
@@ -240,9 +239,8 @@ class EmotionAwareEmbedder:
             return adjusted_embeddings
 
         except Exception as e:
-            logger.error(f"Batch embedding creation failed: {e}")
-            # Return zero vectors as fallback
-            return [[0.0] * self.dimension for _ in segments]
+            logger.exception("Batch embedding creation failed")
+            raise RuntimeError("Could not create batch embeddings") from e
 
     def create_query_embedding(self, query_text: str, context: dict | None = None) -> list[float]:
         """
@@ -276,8 +274,8 @@ class EmotionAwareEmbedder:
             return list(embedding)
 
         except Exception as e:
-            logger.warning(f"Failed to create query embedding: {e}")
-            return [0.0] * self.dimension
+            logger.exception("Failed to create query embedding")
+            raise RuntimeError("Could not create query embedding") from e
 
     def similarity(self, embedding1: list[float], embedding2: list[float]) -> float:
         """
