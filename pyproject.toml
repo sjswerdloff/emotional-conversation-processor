@@ -223,8 +223,10 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "coverage>=7.8.2",
     "mypy>=1.15.0",
     "pre-commit>=4.2.0",
     "pytest>=8.3.5",
     "pytest-async>=0.1.1",
+    "pytest-cov>=6.1.1",
 ]

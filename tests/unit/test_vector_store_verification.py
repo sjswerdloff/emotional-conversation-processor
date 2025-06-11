@@ -12,9 +12,13 @@ Key Contracts Under Test:
 3. Retry Contract: "Transient failures are retried, persistent failures ultimately fail"
 """
 
+import hashlib
+import json
+import time
 from typing import Any
 from unittest.mock import MagicMock, Mock, call, patch
 
+import numpy as np
 import pytest
 
 from emotional_processor.core.models import ConversationSegment, SpeakerType
@@ -577,7 +581,19 @@ class TestBatchPartialFailureContracts:
             assert any(delay <= 0.1 for delay in actual_delays), f"Expected individual retry delays, got: {actual_delays}"
 
     def test_batch_verification_threshold_contract(self) -> None:
-        """Contract: Cosine similarity <0.999 triggers verification failure and retry."""
+        """Contract: System detects and recovers from vectors stored with degraded similarity.
+
+        This test validates the medical-grade verification contract:
+        - When retrieved vectors have cosine similarity < 0.999, verification fails
+        - The system retries and eventually recovers
+        - This protects against data corruption during storage/retrieval
+
+        Following the Test Writing Philosophy:
+        - We test the CONTRACT (detection and recovery), not implementation
+        - We use BEHAVIORAL mocking that simulates real system behavior
+        - We focus on the WHAT: system protects data integrity
+        """
+        # Arrange: Create test data
         segments = [
             ConversationSegment(
                 content="Threshold test segment",
@@ -587,54 +603,133 @@ class TestBatchPartialFailureContracts:
         ]
         embeddings = [[0.7] * 384]
 
-        # Behavioral mock: simulate vectors just below/above similarity threshold
-        threshold_test_vectors = [
-            [0.998] * 384,  # Just below 0.999 threshold - should fail
-            [0.9999] * 384,  # Just above 0.999 threshold - should pass
-        ]
+        # Create realistic vector corruption scenario
+        # In production, corruption might occur due to:
+        # - Precision loss during storage/retrieval
+        # - Network transmission errors
+        # - Hardware failures
+        original_vector = np.array(embeddings[0])
 
-        call_count = 0
+        # Simulate realistic corruption: ~10% of dimensions significantly degraded
+        # This models scenarios like:
+        # - Bit flips in storage
+        # - Precision loss in network transmission
+        # - Memory corruption
+        corrupted_vector = original_vector.copy()
+        corruption_indices = np.random.RandomState(42).choice(384, 38, replace=False)  # 10% of 384
+        corrupted_vector[corruption_indices] *= 0.5  # Significant degradation to ensure < 0.999
 
-        def threshold_verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
-            """Simulate verification with vectors at similarity threshold boundary."""
-            nonlocal call_count
-            call_count += 1
+        # Verify this creates similarity just below threshold
+        corrupted_similarity = np.dot(original_vector, corrupted_vector) / (
+            np.linalg.norm(original_vector) * np.linalg.norm(corrupted_vector)
+        )
+        assert corrupted_similarity < 0.999, (
+            f"Test vector corruption should create similarity < 0.999, got {corrupted_similarity:.6f}"
+        )
 
-            point = Mock()
-            point.id = "threshold_test"
+        # Create behavioral mock that simulates real verification system
+        verification_state = {"attempt_count": 0, "corruption_active": True, "verification_history": []}
 
-            # First call: return vector below threshold (should fail)
-            # Second call: return vector above threshold (should pass)
-            if call_count == 1:
-                point.vector = threshold_test_vectors[0]  # Below threshold
-            else:
-                point.vector = embeddings[0]  # Exact match - above threshold
+        def realistic_verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
+            """Behavioral mock: Simulates real system with transient corruption.
 
-            point.payload = {
-                "content": segments[0].content,
-                "speaker": str(segments[0].speaker),
-                "segment_id": segments[0].segment_id,
-                "_verification": {
-                    "vector_hash": "test_hash",
-                    "payload_hash": "test_payload_hash",
-                    "verification_attempt": call_count,
-                },
-            }
-            return [point]
+            This mock behaves like the real Qdrant system:
+            1. First attempt returns corrupted data (simulating real-world corruption)
+            2. Subsequent attempts return correct data (simulating retry success)
+            3. Maintains verification metadata like the real system
+            """
+            verification_state["attempt_count"] += 1
+            attempt = verification_state["attempt_count"]
 
-        self.mock_client.retrieve.side_effect = threshold_verification_behavior
+            # Track verification attempts for diagnostic purposes
+            verification_state["verification_history"].append(
+                {"attempt": attempt, "corruption_active": verification_state["corruption_active"], "timestamp": time.time()}
+            )
+
+            results = []
+            for segment_id in ids:
+                point = Mock()
+                point.id = segment_id
+
+                # Behavioral decision: First attempt returns corrupted data
+                if attempt == 1 and verification_state["corruption_active"]:
+                    # Return corrupted vector (simulating real corruption)
+                    point.vector = corrupted_vector.tolist()
+                    vector_to_hash = corrupted_vector
+                else:
+                    # Return correct vector (simulating successful retry)
+                    point.vector = original_vector.tolist()
+                    vector_to_hash = original_vector
+                    verification_state["corruption_active"] = False
+
+                # Simulate real system's hash computation
+                vector_bytes = np.array(vector_to_hash, dtype=np.float32).tobytes()
+                actual_vector_hash = hashlib.sha256(vector_bytes).hexdigest()
+
+                # Build complete payload as real system would
+                segment = segments[0]  # We know there's only one in this test
+                payload_data = {
+                    "content": segment.content,
+                    "speaker": str(segment.speaker),
+                    "segment_id": segment.segment_id,
+                    "timestamp": segment.timestamp,
+                    "emotional_score": segment.emotional_score,
+                    "emotional_labels": segment.emotional_labels,
+                    "technical_score": segment.technical_score,
+                    "importance_weight": segment.importance_weight,
+                    "conversation_id": segment.conversation_id,
+                    "word_count": segment.word_count,
+                    "content_type": str(segment.content_type),
+                    "has_strong_emotion": segment.has_strong_emotion,
+                    "is_highly_technical": segment.is_highly_technical,
+                    "metadata": segment.metadata,
+                }
+
+                # Compute payload hash as real system would
+                payload_str = json.dumps(payload_data, sort_keys=True, default=str)
+                actual_payload_hash = hashlib.sha256(payload_str.encode()).hexdigest()
+
+                # Complete payload with verification metadata
+                point.payload = {
+                    **payload_data,
+                    "_verification": {
+                        "vector_hash": actual_vector_hash,
+                        "payload_hash": actual_payload_hash,
+                        "write_timestamp": time.time() - 0.5,  # Written 0.5s ago
+                        "write_attempt": 1,
+                        "verification_enabled": True,
+                        "verification_attempt": attempt,
+                    },
+                }
+                results.append(point)
+
+            return results
+
+        # Configure mock with behavioral implementation
+        self.mock_client.retrieve.side_effect = realistic_verification_behavior
         self.mock_client.upsert.return_value = None
 
-        # Mock time.sleep to avoid delays in tests
+        # Act: Execute the operation under test
         with patch("time.sleep") as mock_sleep:
-            # Contract: Should eventually succeed after threshold-based retry
             point_ids = self.store.store_batch_segments(segments, embeddings)
 
-            # Contract: Should succeed with correct point IDs
-            assert point_ids == ["threshold_test"]
+        # Assert: Verify the CONTRACT was fulfilled
+        # Contract 1: Operation eventually succeeds despite corruption
+        assert point_ids == ["threshold_test"], "Contract violation: System should eventually store segment successfully"
 
-            # Contract: Should have retried due to threshold failure
-            assert self.mock_client.retrieve.call_count >= 2, "Should have retried after threshold verification failure"
+        # Contract 2: System detected corruption and retried
+        assert verification_state["attempt_count"] >= 2, "Contract violation: System should retry when similarity < 0.999"
 
-            # Contract: Should have used backoff delay for threshold-based retry
-            assert mock_sleep.call_count >= 1, "Should have used backoff delay for threshold retry"
+        # Contract 3: Corruption was resolved through retry
+        assert not verification_state["corruption_active"], (
+            "Contract violation: System should recover from transient corruption"
+        )
+
+        # Contract 4: System used appropriate retry delays
+        assert mock_sleep.call_count >= 1, "Contract violation: System should delay between retry attempts"
+
+        # Diagnostic information (following philosophy: tests are documentation)
+        # print(f"\nDiagnostic: Verification attempts: {verification_state['attempt_count']}")
+        # print(f"Diagnostic: Corruption detected with similarity: {corrupted_similarity:.6f}")
+        # print(f"Diagnostic: 10% of dimensions corrupted (38/384) by factor 0.5")
+        # print(f"Diagnostic: Recovery successful after retry")
