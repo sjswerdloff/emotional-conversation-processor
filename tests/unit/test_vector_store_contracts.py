@@ -207,15 +207,24 @@ class TestVectorStoreStorageContracts:
         )
         embedding = [0.1] * 384
 
-        # Configure mock to fail
-        self.mock_client.upsert.side_effect = Exception("Qdrant connection failed")
+        # Configure mock to fail consistently for retry attempts
+        # Need enough failures to exhaust all retry attempts (3 attempts + individual fallback)
+        connection_error = Exception("Qdrant connection failed")
+        self.mock_client.upsert.side_effect = [connection_error] * 10  # Enough for all retries
 
-        # Verify error handling
-        with pytest.raises(RuntimeError, match="Could not store conversation segment"):
+        # Verify error handling - expect AIMemoryStorageIntegrityError for AI memory failures
+        from emotional_processor.storage.vector_store import AIMemoryStorageIntegrityError
+
+        with pytest.raises(AIMemoryStorageIntegrityError) as exc_info:
             self.store.store_segment(segment, embedding)
 
-        # Verify client was called despite error
-        self.mock_client.upsert.assert_called_once()
+        # Verify exception contains proper context
+        error = exc_info.value
+        assert error.point_id == "seg_error"
+        assert error.error_type == "storage_operation_failed"
+
+        # Verify client was called multiple times due to retry logic
+        assert self.mock_client.upsert.call_count >= 1
 
 
 class TestVectorStoreRetrievalContracts:

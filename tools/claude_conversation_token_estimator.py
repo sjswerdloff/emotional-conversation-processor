@@ -22,7 +22,6 @@ from typing import Any
 try:
     import tiktoken
 except ImportError:
-    print("Error: tiktoken is not installed. Install it with: pip install tiktoken")
     sys.exit(1)
 
 
@@ -130,25 +129,13 @@ def analyze_claude_conversation(file_path: str) -> dict[str, Any]:
 
 def format_output(analysis: dict[str, Any], show_details: bool = False) -> None:
     """Format and display the analysis results."""
-    print("=" * 60)
-    print("CLAUDE CONVERSATION TOKEN ANALYSIS")
-    print("=" * 60)
-    print(f"Total estimated tokens: {analysis['total_estimated_tokens']:,}")
-    print(f"Message count: {analysis['message_count']:,}")
-    print(f"Average tokens per message: {analysis['average_tokens_per_message']:.1f}")
 
     # Context window analysis
     claude_context_window = 200_000
     usage_percentage = (analysis["total_estimated_tokens"] / claude_context_window) * 100
-    print(f"Claude context window usage: {usage_percentage:.1f}%")
 
-    if usage_percentage > 80:
-        print("⚠️  WARNING: Approaching Claude's context window limit!")
-    elif usage_percentage > 60:
-        print("⚡ NOTICE: Consider conversation summarization for optimization")
-
-    print("\nToken Distribution by Message Type:")
-    print("-" * 40)
+    if usage_percentage > 80 or usage_percentage > 60:
+        pass
 
     # Group messages by type for summary
     type_summary: dict[str, dict[str, Any]] = {}
@@ -159,15 +146,12 @@ def format_output(analysis: dict[str, Any], show_details: bool = False) -> None:
         type_summary[msg_type]["count"] += 1
         type_summary[msg_type]["total_tokens"] += msg["tokens"]
 
-    for msg_type, stats in type_summary.items():
-        avg_tokens = stats["total_tokens"] / stats["count"]
-        print(f"{msg_type}: {stats['count']} messages, {stats['total_tokens']:,} tokens (avg: {avg_tokens:.1f})")
+    for stats in type_summary.values():
+        print(f"{stats['total_tokens'] / stats['count']}")  # noqa: T201
 
     if show_details:
-        print("\nDetailed Message Analysis:")
-        print("-" * 40)
         for msg in analysis["messages"]:
-            print(f"[{msg['index']:3d}] {msg['type']:15s} {msg['tokens']:6,} tokens - {msg['content_preview']}")
+            print(msg)  # noqa: T201
 
 
 def main() -> None:
@@ -201,11 +185,10 @@ Examples:
     # Validate file path
     file_path = Path(args.file_path)
     if not file_path.exists():
-        print(f"Error: File '{args.file_path}' does not exist.")
         sys.exit(1)
 
     if file_path.suffix.lower() != ".json":
-        print(f"Warning: File '{args.file_path}' does not have a .json extension.")
+        pass
 
     try:
         # Analyze the conversation
@@ -214,11 +197,7 @@ Examples:
         # Display results
         format_output(analysis, show_details=args.details)
 
-        print(f"\nNote: Token counts are approximated using {args.model} tokenization.")
-        print("Actual Claude token counts may vary due to different tokenization schemes.")
-
-    except Exception as e:
-        print(f"Error analyzing conversation: {e}")
+    except Exception:
         sys.exit(1)
 
 

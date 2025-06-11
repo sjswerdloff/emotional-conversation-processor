@@ -770,7 +770,9 @@ class ConversationVectorStore:
 
         except Exception as e:
             logger.exception(f"Internal storage failed for segment {segment.segment_id}")
-            raise RuntimeError(f"Internal storage failed for segment {segment.segment_id}: {e}") from e
+            raise AIMemoryStorageIntegrityError(
+                "Could not store AI memory segment", point_id=segment.segment_id, error_type="storage_operation_failed"
+            ) from e
 
     def store_segment(self, segment: ConversationSegment, embedding: list[float], upsert: bool = True) -> str:
         """
@@ -807,8 +809,8 @@ class ConversationVectorStore:
 
         except Exception as e:
             logger.error(f"Failed to store segment {segment.segment_id}: {e}")
-            if isinstance(e, RuntimeError):
-                # Re-raise verification/storage failures
+            if isinstance(e, RuntimeError | AIMemoryStorageIntegrityError):
+                # Re-raise medical-grade verification/storage failures
                 raise
             else:
                 # Wrap unexpected errors

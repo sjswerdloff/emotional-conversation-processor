@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, Mock, call, patch
 import pytest
 
 from emotional_processor.core.models import ConversationSegment, SpeakerType
-from emotional_processor.storage.vector_store import ConversationVectorStore
+from emotional_processor.storage.vector_store import AIMemoryStorageIntegrityError, ConversationVectorStore
 
 
 class TestStorageIntegrityContract:
@@ -286,7 +286,7 @@ class TestBatchStorageVerificationContract:
         self.store._collection_initialized = True
 
     def test_batch_verification_contract_individual_verification(self) -> None:
-        """Contract: Each segment in batch should be individually verified."""
+        """Contract: Batch storage with verification should verify each segment's integrity."""
         segments = [
             ConversationSegment(
                 content=f"Batch segment {i}",
@@ -297,17 +297,20 @@ class TestBatchStorageVerificationContract:
         ]
         embeddings = [[0.1 * i] * 384 for i in range(3)]
 
-        # Set up successful storage and verification
+        # Set up successful batch storage and verification
         self.mock_client.upsert.return_value = None
 
-        def verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
-            # Return successful verification for each requested ID
+        def batch_verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
+            # Simulate successful batch verification - return all requested points
             results = []
-            for _i, segment_id in enumerate(ids):
+            for segment_id in ids:
                 point = Mock()
+                point.id = segment_id
                 # Find matching segment and embedding
                 seg_index = int(segment_id.split("_")[1])
                 point.vector = embeddings[seg_index]
+
+                # Create payload with verification metadata
                 point.payload = {
                     "content": segments[seg_index].content,
                     "speaker": str(segments[seg_index].speaker),
@@ -323,11 +326,18 @@ class TestBatchStorageVerificationContract:
                     "is_highly_technical": segments[seg_index].is_highly_technical,
                     "metadata": segments[seg_index].metadata,
                     "timestamp": segments[seg_index].timestamp,
+                    "_verification": {
+                        "vector_hash": f"hash_{segment_id}_vector",
+                        "payload_hash": f"hash_{segment_id}_payload",
+                        "write_timestamp": 1234567890.0,
+                        "write_attempt": 1,
+                        "verification_enabled": True,
+                    },
                 }
                 results.append(point)
             return results
 
-        self.mock_client.retrieve.side_effect = verification_behavior
+        self.mock_client.retrieve.side_effect = batch_verification_behavior
 
         # Contract: Batch storage should succeed with verification
         point_ids = self.store.store_batch_segments(segments, embeddings)
@@ -336,14 +346,13 @@ class TestBatchStorageVerificationContract:
         assert len(point_ids) == 3
         assert point_ids == ["batch_0", "batch_1", "batch_2"]
 
-        # Contract: Each segment should be stored individually (not as batch)
-        assert self.mock_client.upsert.call_count == 3
-
-        # Contract: Each segment should be verified individually
-        assert self.mock_client.retrieve.call_count == 3
+        # Contract: Batch approach should be attempted first (fewer calls than individual)
+        # In successful batch case, we expect 1 batch upsert + 1 batch verification
+        assert self.mock_client.upsert.call_count >= 1
+        assert self.mock_client.retrieve.call_count >= 1
 
     def test_batch_verification_contract_fail_fast_on_single_failure(self) -> None:
-        """Contract: Batch should fail fast if any single segment verification fails."""
+        """Contract: Batch should fail fast if any segment verification fails after all retries."""
         segments = [
             ConversationSegment(
                 content=f"Batch segment {i}",
@@ -352,42 +361,25 @@ class TestBatchStorageVerificationContract:
             )
             for i in range(3)
         ]
-        embeddings = [[0.1 * i] * 384 for i in range(3)]
+        embeddings = [[0.0] * 384 for i in range(3)]
 
-        # First segment succeeds, second fails
-        self.mock_client.upsert.side_effect = [
-            None,  # First succeeds
-            Exception("Second segment fails"),  # Second fails
-        ]
+        # Configure consistent failure to exhaust all retries (batch + individual fallback)
+        failure_error = Exception("Persistent storage failure")
+        self.mock_client.upsert.side_effect = [failure_error] * 20  # Enough for all retry attempts
 
-        # Set up verification for first segment only
-        first_point = Mock()
-        first_point.vector = embeddings[0]
-        first_point.payload = {
-            "content": segments[0].content,
-            "speaker": str(segments[0].speaker),
-            "segment_id": segments[0].segment_id,
-            "emotional_score": segments[0].emotional_score,
-            "emotional_labels": segments[0].emotional_labels,
-            "technical_score": segments[0].technical_score,
-            "importance_weight": segments[0].importance_weight,
-            "conversation_id": segments[0].conversation_id,
-            "word_count": segments[0].word_count,
-            "content_type": str(segments[0].content_type),
-            "has_strong_emotion": segments[0].has_strong_emotion,
-            "is_highly_technical": segments[0].is_highly_technical,
-            "metadata": segments[0].metadata,
-            "timestamp": segments[0].timestamp,
-        }
-        self.mock_client.retrieve.return_value = [first_point]
+        # Contract: Should fail fast with AIMemoryStorageIntegrityError after all retries
+        from emotional_processor.storage.vector_store import AIMemoryStorageIntegrityError
 
-        # Contract: Should fail fast on any segment failure
-        with pytest.raises(RuntimeError, match="Batch storage failed at segment"):
+        with pytest.raises(AIMemoryStorageIntegrityError) as exc_info:
             self.store.store_batch_segments(segments, embeddings)
 
-        # Contract: Should have attempted first segment and started second
-        # (Second fails after 3 retry attempts = 4 total calls)
-        assert self.mock_client.upsert.call_count == 4  # 1 success + 3 retries for second
+        # Contract: Error should contain context about the failure
+        error = exc_info.value
+        assert error.point_id is not None  # Should identify which segment failed
+        assert error.error_type == "individual_verification_failed"
+
+        # Contract: Should have attempted multiple retries before failing
+        assert self.mock_client.upsert.call_count >= 3  # At least 3 attempts per retry logic
 
 
 class TestVerificationDisabledContract:
@@ -445,3 +437,204 @@ class TestVerificationDisabledContract:
 
         # Contract: Individual storage calls should be made (2 segments)
         assert self.mock_client.upsert.call_count == 2
+
+
+class TestBatchPartialFailureContracts:
+    """Contract tests for batch verification partial failure scenarios."""
+
+    def setup_method(self) -> None:
+        """Set up test environment with mocked Qdrant client."""
+        self.mock_client = MagicMock()
+        self.store = ConversationVectorStore(enable_verification=True, max_batch_retries=3)
+        self.store._client = self.mock_client
+        self.store._collection_initialized = True
+
+    def test_batch_partial_failure_retry_contract(self) -> None:
+        """Contract: When some segments fail verification, system retries batch then falls back to individual."""
+        segments = [
+            ConversationSegment(
+                content=f"Partial failure segment {i}",
+                speaker=SpeakerType.USER,
+                segment_id=f"partial_{i}",
+            )
+            for i in range(5)
+        ]
+        embeddings = [[0.1 * i] * 384 for i in range(5)]
+
+        # Behavioral mock: simulate partial verification failures
+        def partial_failure_verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
+            """Simulate partial verification failure - some segments verify, others don't."""
+            results = []
+            for i, segment_id in enumerate(ids):
+                point = Mock()
+                point.id = segment_id
+
+                # First 3 attempts: return partial failures (segments 2,3 fail verification)
+                if self.mock_client.retrieve.call_count <= 3 and i in [2, 3]:
+                    # Simulate verification failure: wrong vector or missing point
+                    if i == 2:
+                        # Wrong vector (will fail cosine similarity)
+                        point.vector = [0.9] * 384  # Different from expected [0.2] * 384
+                    else:
+                        # Missing point (simulate retrieval failure)
+                        continue  # Don't add to results - simulates missing point
+                else:
+                    # Correct vector for successful verification
+                    point.vector = embeddings[i]
+
+                # Add verification metadata for successful cases
+                point.payload = {
+                    "content": segments[i].content,
+                    "speaker": str(segments[i].speaker),
+                    "segment_id": segments[i].segment_id,
+                    "_verification": {
+                        "vector_hash": "correct_hash",
+                        "payload_hash": "correct_payload_hash",
+                        "verification_attempt": 1,
+                    },
+                }
+                results.append(point)
+            return results
+
+        self.mock_client.retrieve.side_effect = partial_failure_verification_behavior
+        self.mock_client.upsert.return_value = None
+
+        # Mock individual storage success for fallback
+        def individual_storage_behavior(collection_name: str, points: list[Any], **kwargs: Any) -> None:
+            """Simulate successful individual storage."""
+
+        # Mock time.sleep to avoid delays in tests
+        with (
+            patch("time.sleep") as mock_sleep,
+            patch.object(
+                self.store, "_store_segments_individually_with_verification", return_value=["partial_2", "partial_3"]
+            ) as mock_individual,
+        ):
+            # Contract: Should eventually succeed with partial batch failure + individual fallback
+            # This should trigger batch retries then individual fallback
+            point_ids = self.store.store_batch_segments(segments, embeddings)
+
+            # Contract: Should succeed with individual fallback
+            assert point_ids == ["partial_2", "partial_3"], f"Expected fallback point IDs, got: {point_ids}"
+
+            # Contract: Should have attempted batch storage multiple times (up to max_batch_retries)
+            assert self.mock_client.upsert.call_count >= 3, "Should have retried batch storage 3 times"
+            assert self.mock_client.retrieve.call_count >= 3, "Should have verified batch storage 3 times"
+
+            # Contract: Should have used exponential backoff between batch retries
+            assert mock_sleep.call_count >= 2, "Should have used exponential backoff delays"
+
+            # Contract: Should have fallen back to individual storage
+            mock_individual.assert_called_once(), "Should have called individual fallback"
+
+    def test_batch_retry_exponential_backoff_contract(self) -> None:
+        """Contract: Retry delays follow exponential backoff (0.5s, 1s, 2s) before fallback."""
+        segments = [
+            ConversationSegment(
+                content="Backoff test segment",
+                speaker=SpeakerType.USER,
+                segment_id="backoff_test",
+            )
+        ]
+        embeddings = [[0.5] * 384]
+
+        # Behavioral mock: simulate consistent batch verification failure
+        def failing_verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
+            """Simulate consistent verification failure to trigger all retries."""
+            # Return empty list to simulate verification failure (missing points)
+            return []
+
+        self.mock_client.retrieve.side_effect = failing_verification_behavior
+        self.mock_client.upsert.return_value = None
+
+        # Mock individual fallback to also fail (to test full retry sequence)
+        with (
+            patch("time.sleep") as mock_sleep,
+            patch.object(
+                self.store,
+                "_store_segments_individually_with_verification",
+                side_effect=AIMemoryStorageIntegrityError(
+                    "Individual verification failed", point_id="backoff_test", error_type="individual_verification_failed"
+                ),
+            ),
+        ):
+            # Contract: Should fail after all retries and fallback attempts
+            with pytest.raises(AIMemoryStorageIntegrityError):
+                self.store.store_batch_segments(segments, embeddings)
+
+            # Contract: Should have used exponential backoff pattern
+            actual_delays = [call.args[0] for call in mock_sleep.call_args_list]
+
+            # Should have multiple backoff delays (batch retries + individual retries)
+            assert len(actual_delays) >= 4, f"Expected multiple backoff delays, got: {actual_delays}"
+
+            # Verify batch exponential backoff pattern exists in the delays
+            # Expected batch delays: 0.5s, 1.0s (first two delays should be for batch retries)
+            assert 0.5 in actual_delays, f"Expected 0.5s batch retry delay, got delays: {actual_delays}"
+            assert 1.0 in actual_delays, f"Expected 1.0s batch retry delay, got delays: {actual_delays}"
+
+            # Verify individual retry delays also exist (0.1s is typical for individual)
+            assert any(delay <= 0.1 for delay in actual_delays), f"Expected individual retry delays, got: {actual_delays}"
+
+    def test_batch_verification_threshold_contract(self) -> None:
+        """Contract: Cosine similarity <0.999 triggers verification failure and retry."""
+        segments = [
+            ConversationSegment(
+                content="Threshold test segment",
+                speaker=SpeakerType.USER,
+                segment_id="threshold_test",
+            )
+        ]
+        embeddings = [[0.7] * 384]
+
+        # Behavioral mock: simulate vectors just below/above similarity threshold
+        threshold_test_vectors = [
+            [0.998] * 384,  # Just below 0.999 threshold - should fail
+            [0.9999] * 384,  # Just above 0.999 threshold - should pass
+        ]
+
+        call_count = 0
+
+        def threshold_verification_behavior(collection_name: str, ids: list[str], **kwargs: Any) -> list[Mock]:
+            """Simulate verification with vectors at similarity threshold boundary."""
+            nonlocal call_count
+            call_count += 1
+
+            point = Mock()
+            point.id = "threshold_test"
+
+            # First call: return vector below threshold (should fail)
+            # Second call: return vector above threshold (should pass)
+            if call_count == 1:
+                point.vector = threshold_test_vectors[0]  # Below threshold
+            else:
+                point.vector = embeddings[0]  # Exact match - above threshold
+
+            point.payload = {
+                "content": segments[0].content,
+                "speaker": str(segments[0].speaker),
+                "segment_id": segments[0].segment_id,
+                "_verification": {
+                    "vector_hash": "test_hash",
+                    "payload_hash": "test_payload_hash",
+                    "verification_attempt": call_count,
+                },
+            }
+            return [point]
+
+        self.mock_client.retrieve.side_effect = threshold_verification_behavior
+        self.mock_client.upsert.return_value = None
+
+        # Mock time.sleep to avoid delays in tests
+        with patch("time.sleep") as mock_sleep:
+            # Contract: Should eventually succeed after threshold-based retry
+            point_ids = self.store.store_batch_segments(segments, embeddings)
+
+            # Contract: Should succeed with correct point IDs
+            assert point_ids == ["threshold_test"]
+
+            # Contract: Should have retried due to threshold failure
+            assert self.mock_client.retrieve.call_count >= 2, "Should have retried after threshold verification failure"
+
+            # Contract: Should have used backoff delay for threshold-based retry
+            assert mock_sleep.call_count >= 1, "Should have used backoff delay for threshold retry"

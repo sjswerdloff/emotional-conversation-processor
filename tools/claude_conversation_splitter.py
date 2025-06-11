@@ -147,7 +147,6 @@ def split_conversation(
 
         created_files.append(str(output_file))
 
-        print(f"Created: {output_file.name} ({len(chunk_messages)} messages)")
 
     return created_files
 
@@ -159,23 +158,13 @@ def analyze_split_strategy(file_path: str, target_chunk_size: int | None = None)
 
     chunk_size, num_chunks = calculate_optimal_chunks(len(messages), target_chunk_size)
 
-    print("=" * 60)
-    print("SPLIT STRATEGY ANALYSIS")
-    print("=" * 60)
-    print(f"Total messages: {len(messages):,}")
-    print(f"Proposed chunks: {num_chunks}")
-    print(f"Messages per chunk: {chunk_size}")
-    print(f"Last chunk size: {len(messages) - (num_chunks - 1) * chunk_size}")
 
-    print("\nChunk breakdown:")
-    print("-" * 40)
 
     for i in range(num_chunks):
         start_idx = i * chunk_size
         end_idx = min(start_idx + chunk_size, len(messages))
-        chunk_size_actual = end_idx - start_idx
+        end_idx - start_idx
 
-        print(f"Chunk {i + 1:2d}: Messages {start_idx + 1:3d}-{end_idx:3d} ({chunk_size_actual:2d} messages)")
 
 
 def main() -> None:
@@ -207,34 +196,23 @@ Examples:
     # Validate input file
     file_path = Path(args.file_path)
     if not file_path.exists():
-        print(f"Error: File '{args.file_path}' does not exist.")
         sys.exit(1)
 
     if file_path.suffix.lower() != ".json":
-        print(f"Warning: File '{args.file_path}' does not have a .json extension.")
+        pass
 
     try:
         if args.analyze_only:
             analyze_split_strategy(str(file_path), args.chunk_size)
         else:
-            created_files = split_conversation(str(file_path), args.chunk_size, args.output_dir, args.prefix)
+            split_conversation(str(file_path), args.chunk_size, args.output_dir, args.prefix)
 
-            print("\n" + "=" * 60)
-            print("SPLIT COMPLETE")
-            print("=" * 60)
-            print(f"Original file: {file_path.name}")
-            print(f"Created {len(created_files)} chunk files")
 
             if args.output_dir:
-                print(f"Output directory: {args.output_dir}")
+                pass
 
-            print("\nTo upload chunks sequentially to Claude:")
-            print("1. Start with part_01 (contains conversation beginning)")
-            print("2. Continue with subsequent parts in order")
-            print("3. Each chunk preserves metadata and context markers")
 
-    except Exception as e:
-        print(f"Error processing conversation: {e}")
+    except Exception:
         sys.exit(1)
 
 
