@@ -77,7 +77,7 @@ class TestVectorStoreStorageContracts:
         # Verify complete metadata preservation
         payload = stored_point.payload
         assert payload["content"] == segment.content
-        assert payload["speaker"] == "SpeakerType.ASSISTANT"  # Speaker enum is converted to string representation
+        assert payload["speaker"] == "Assistant"  # Speaker enum value is stored, not string representation
         assert payload["timestamp"] == segment.timestamp
         assert payload["emotional_score"] == 0.9
         assert payload["emotional_labels"] == ["gratitude", "joy"]

@@ -137,7 +137,7 @@ class TestVerificationFailureContract:
         corrupted_point.vector = [0.0, 1.0, 0.0] * 128  # Completely different
         corrupted_point.payload = {
             "content": "CORRUPTED CONTENT",  # Content changed
-            "speaker": str(segment.speaker),
+            "speaker": segment.speaker.value if hasattr(segment.speaker, "value") else str(segment.speaker),
             "segment_id": segment.segment_id,
             "emotional_score": segment.emotional_score,
             "emotional_labels": segment.emotional_labels,
@@ -206,7 +206,7 @@ class TestRetryContract:
         success_point.vector = embedding
         success_point.payload = {
             "content": segment.content,
-            "speaker": str(segment.speaker),
+            "speaker": segment.speaker.value if hasattr(segment.speaker, "value") else str(segment.speaker),
             "segment_id": segment.segment_id,
             "emotional_score": segment.emotional_score,
             "emotional_labels": segment.emotional_labels,
@@ -317,7 +317,9 @@ class TestBatchStorageVerificationContract:
                 # Create payload with verification metadata
                 point.payload = {
                     "content": segments[seg_index].content,
-                    "speaker": str(segments[seg_index].speaker),
+                    "speaker": segments[seg_index].speaker.value
+                    if hasattr(segments[seg_index].speaker, "value")
+                    else str(segments[seg_index].speaker),
                     "segment_id": segments[seg_index].segment_id,
                     "emotional_score": segments[seg_index].emotional_score,
                     "emotional_labels": segments[seg_index].emotional_labels,
@@ -489,7 +491,9 @@ class TestBatchPartialFailureContracts:
                 # Add verification metadata for successful cases
                 point.payload = {
                     "content": segments[i].content,
-                    "speaker": str(segments[i].speaker),
+                    "speaker": segments[i].speaker.value
+                    if hasattr(segments[i].speaker, "value")
+                    else str(segments[i].speaker),
                     "segment_id": segments[i].segment_id,
                     "_verification": {
                         "vector_hash": "correct_hash",
@@ -670,7 +674,7 @@ class TestBatchPartialFailureContracts:
                 segment = segments[0]  # We know there's only one in this test
                 payload_data = {
                     "content": segment.content,
-                    "speaker": str(segment.speaker),
+                    "speaker": segment.speaker.value if hasattr(segment.speaker, "value") else str(segment.speaker),
                     "segment_id": segment.segment_id,
                     "timestamp": segment.timestamp,
                     "emotional_score": segment.emotional_score,
