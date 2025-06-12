@@ -204,3 +204,6 @@ Thumbs.db
 
 # Artifacts directory (used by deployment script)
 artifacts/
+
+# LLM communication
+ForCassieOnly/
