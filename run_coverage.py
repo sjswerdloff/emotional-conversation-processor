@@ -4,6 +4,7 @@
 import subprocess
 import sys
 
+
 def run_coverage():
     """Run pytest with coverage, excluding the failing test."""
 
@@ -21,21 +22,14 @@ def run_coverage():
         "tests/"                      # Run all tests in the tests directory
     ]
 
-    print(f"Running command: {' '.join(cmd)}")
-    print("-" * 80)
 
     # Run the command
     result = subprocess.run(cmd, cwd="/Users/stuartswerdloff/PythonProjects/emotional-conversation-processor")
 
     if result.returncode == 0:
-        print("\n" + "=" * 80)
-        print("✅ Tests passed! Coverage report generated.")
-        print("📊 View HTML report: open htmlcov/index.html")
-        print("=" * 80)
+        pass
     else:
-        print("\n" + "=" * 80)
-        print("❌ Tests failed with return code:", result.returncode)
-        print("=" * 80)
+        pass
 
     return result.returncode
 

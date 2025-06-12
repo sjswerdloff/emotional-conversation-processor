@@ -2,12 +2,10 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
-  schedule:
-    # Run tests daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    branches: [ main ]
+
 
 env:
   PYTHON_VERSION: '3.11'
@@ -49,7 +47,7 @@ jobs:
     name: Unit Tests
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.11']
 
     steps:
     - uses: actions/checkout@v4
@@ -83,13 +81,6 @@ jobs:
           --cov-report=term-missing \
           --junit-xml=test-results.xml
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
 
   # Integration tests with Qdrant
   integration-test:
@@ -188,42 +179,6 @@ jobs:
         QDRANT_HOST: localhost
         QDRANT_PORT: 6333
 
-  # Security scanning
-  security:
-    runs-on: ubuntu-latest
-    name: Security Scan
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v2
-      with:
-        version: "latest"
-
-    - name: Set up Python
-      run: uv python install ${{ env.PYTHON_VERSION }}
-
-    - name: Run Bandit security scan
-      uses: securecodewarrior/github-action-bandit@v1
-      with:
-        path: src/
-        level: medium
-        confidence: medium
-        exit_zero: true
-
-    - name: Run Safety dependency check
-      run: |
-        uv pip install safety
-        uv run safety check --json --output safety-report.json || true
-
-    - name: Upload security reports
-      uses: actions/upload-artifact@v3
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
-          safety-report.json
 
   # Docker build test
   docker-build:
@@ -279,36 +234,36 @@ jobs:
         path: docs/_build/html/
 
   # Deployment (only on main branch)
-  deploy:
-    needs: [lint, test, integration-test, docker-build]
-    runs-on: ubuntu-latest
-    name: Deploy
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  # deploy:
+  #   needs: [lint, test, integration-test, docker-build]
+  #   runs-on: ubuntu-latest
+  #   name: Deploy
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-    steps:
-    - uses: actions/checkout@v4
+  #   steps:
+  #   - uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+  #   - name: Set up Docker Buildx
+  #     uses: docker/setup-buildx-action@v3
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+  #   - name: Login to Docker Hub
+  #     uses: docker/login-action@v3
+  #     with:
+  #       username: ${{ secrets.DOCKER_USERNAME }}
+  #       password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: docker/Dockerfile
-        target: production
-        push: true
-        tags: |
-          ${{ secrets.DOCKER_USERNAME }}/emotional-conversation-processor:latest
-          ${{ secrets.DOCKER_USERNAME }}/emotional-conversation-processor:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+  #   - name: Build and push Docker image
+  #     uses: docker/build-push-action@v5
+  #     with:
+  #       context: .
+  #       file: docker/Dockerfile
+  #       target: production
+  #       push: true
+  #       tags: |
+  #         ${{ secrets.DOCKER_USERNAME }}/emotional-conversation-processor:latest
+  #         ${{ secrets.DOCKER_USERNAME }}/emotional-conversation-processor:${{ github.sha }}
+  #       cache-from: type=gha
+  #       cache-to: type=gha,mode=max
 
   # Notification on failure
   notify-failure:

@@ -191,7 +191,7 @@ class ConversationVectorStore:
             # Create payload with rich metadata
             payload = {
                 "content": segment.content,
-                "speaker": str(segment.speaker),
+                "speaker": segment.speaker.value if hasattr(segment.speaker, "value") else str(segment.speaker),
                 "timestamp": segment.timestamp,
                 "emotional_score": segment.emotional_score,
                 "emotional_labels": segment.emotional_labels,
@@ -268,7 +268,9 @@ class ConversationVectorStore:
         # Critical fields that must match exactly
         critical_fields = {
             "content": original_segment.content,
-            "speaker": str(original_segment.speaker),
+            "speaker": original_segment.speaker.value
+            if hasattr(original_segment.speaker, "value")
+            else str(original_segment.speaker),
             "timestamp": original_segment.timestamp,
             "emotional_score": original_segment.emotional_score,
             "emotional_labels": original_segment.emotional_labels,
@@ -744,7 +746,7 @@ class ConversationVectorStore:
                 # Create payload with rich metadata (no verification metadata)
                 payload = {
                     "content": segment.content,
-                    "speaker": str(segment.speaker),
+                    "speaker": segment.speaker.value if hasattr(segment.speaker, "value") else str(segment.speaker),
                     "timestamp": segment.timestamp,
                     "emotional_score": segment.emotional_score,
                     "emotional_labels": segment.emotional_labels,

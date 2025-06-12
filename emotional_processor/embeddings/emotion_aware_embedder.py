@@ -175,7 +175,7 @@ class EmotionAwareEmbedder:
             if norm > 0:
                 embedding = embedding / norm
 
-            return list(embedding)
+            return [float(x) for x in embedding]
 
         except Exception as e:
             logger.exception(f"Failed to create embedding for segment {segment.segment_id}")
@@ -271,7 +271,7 @@ class EmotionAwareEmbedder:
             if norm > 0:
                 embedding = embedding / norm
 
-            return list(embedding)
+            return [float(x) for x in embedding]
 
         except Exception as e:
             logger.exception("Failed to create query embedding")
