@@ -638,6 +638,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "qdrant-client", specifier = ">=1.7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.6" },
     { name = "seaborn", marker = "extra == 'notebooks'", specifier = ">=0.12.0" },
     { name = "sentence-transformers", specifier = ">=2.2.2" },
     { name = "spacy", specifier = ">=3.7.0" },
