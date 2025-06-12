@@ -1,0 +1,84 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Python package
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install uv
+      run: |
+        python -m pip install --upgrade pip
+        pip install uv
+
+    - name: Check if lock file is in sync
+      run: |
+        if ! uv lock --check; then
+          echo "::error::uv.lock is out of sync with pyproject.toml. Please run 'uv lock' locally and commit the updated lock file."
+          exit 1
+        fi
+
+    - name: Restore venv cache
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
+
+    - name: Set up virtual environment
+      run: |
+        if [ ! -d ".venv" ]; then
+          uv venv .venv
+        fi
+        echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+    - name: Cache virtual environment
+      uses: actions/cache@v4
+      id: venv-cache
+      with:
+        path: .venv
+        key: venv-${{ hashFiles('**/pyproject.toml') }}
+
+    - name: Ensure cache is healthy
+      if: steps.venv-cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        timeout 10s .venv/bin/python -m pip --version || rm -rf .venv
+
+    - name: Install dependencies
+      run: |
+        uv sync --group dev
+    - name: Check formatting with ruff
+      run: |
+        ruff format --check .
+    - name: Lint with ruff
+      run: |
+        ruff check .
+
+    - name: Run unit tests with pytest
+      run: |
+        uv run pytest tests/unit
