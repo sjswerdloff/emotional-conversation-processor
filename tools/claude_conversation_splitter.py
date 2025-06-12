@@ -147,7 +147,6 @@ def split_conversation(
 
         created_files.append(str(output_file))
 
-
     return created_files
 
 
@@ -158,13 +157,10 @@ def analyze_split_strategy(file_path: str, target_chunk_size: int | None = None)
 
     chunk_size, num_chunks = calculate_optimal_chunks(len(messages), target_chunk_size)
 
-
-
     for i in range(num_chunks):
         start_idx = i * chunk_size
         end_idx = min(start_idx + chunk_size, len(messages))
         end_idx - start_idx
-
 
 
 def main() -> None:
@@ -207,10 +203,8 @@ Examples:
         else:
             split_conversation(str(file_path), args.chunk_size, args.output_dir, args.prefix)
 
-
             if args.output_dir:
                 pass
-
 
     except Exception:
         sys.exit(1)
